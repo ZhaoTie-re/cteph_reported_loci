@@ -148,9 +148,9 @@ process GT_prepare_naga {
     tuple file(vcf), file(vcf_tbi) from reported_loci_naga_ch
     
     output:
-    file(GTMatrix_naga)
+    file(GTMatrix_naga) into GTMatrix_naga_ch
     file(nocalFigure_naga)
-    file('reported_loci_ls.txt')
+    file('reported_loci_ls.txt') into lociList_naga_ch
     
     script:
     GTMatrix_naga = 'GTmatrix_df_naga.csv'
@@ -183,3 +183,66 @@ process case_control_stats {
     python ${params.scriptPath}/CaseControl_stats.py --case_vcfPath $case_vcf --control_vcfPath $control_vcf --lociKnown ${lociKnown}
     """
 }
+
+lociList_naga_ch
+    .splitText()
+    .combine(GTMatrix_naga_ch)
+    .set{ combined_naga_ch }
+
+
+process PRO_GT_naga_assoc {
+    
+    executor 'slurm'
+    queue 'gr10478b'
+    time '36h'
+
+    publishDir "${params.outDir}/08.PRO_GT_naga_assoc", mode: 'symlink'
+    
+    input:
+    tuple loci, file(GTMatrix_naga) from combined_naga_ch
+
+    output:
+    tuple loci, file('*_PRO_result.csv') into assocTable_naga
+    file('*_QQ_plot.pdf')
+    
+    script:
+    """
+    source activate cteph_geno_pro
+    python ${params.scriptPath}/PRO_GT_assoc.py --GTMatrix $GTMatrix_naga --protPath ${params.protPath} --loci $loci
+    """
+}
+
+process PRO_GT_naga_assoc_summary {
+    
+    executor 'slurm'
+    queue 'gr10478b'
+    time '36h'
+
+    publishDir "${params.outDir}/09.PRO_GT_naga_assoc_summary", mode: 'symlink'
+    
+    input:
+    tuple loci, file(Pro_csv) from assocTable_naga
+    path lociKnown from params.lociKnown
+    path annoFile from params.annoFile
+    
+    output:
+    tuple loci, file('*_PRO_result_anno.csv') into assocSummary_naga
+    file('*_PRO_result_qq_plot.html')
+    
+    script:
+    """
+    source activate cteph_geno_pro
+
+    python ${params.scriptPath}/PRO_GT_assoc_summary.py \\
+    --loci ${loci.trim()} \\
+    --Pro_ass_file ${Pro_csv} \\
+    --reported_loci ${lociKnown} \\
+    --anno_file ${annoFile}
+    """
+}
+
+// assocSummary_naga
+//     .view()
+
+assocSummary
+    .view()
