@@ -240,9 +240,3 @@ process PRO_GT_naga_assoc_summary {
     --anno_file ${annoFile}
     """
 }
-
-// assocSummary_naga
-//     .view()
-
-assocSummary
-    .view()
