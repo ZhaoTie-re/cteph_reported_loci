@@ -240,3 +240,51 @@ process PRO_GT_naga_assoc_summary {
     --anno_file ${annoFile}
     """
 }
+
+assocSummary
+    .map { it -> ["\"${it[0].trim()}\"", "\"${it[1]}\""] }
+    .collect(flat:false)
+    .map { it -> ["phom", it] }
+    .set { formatted_ass_ph }
+
+assocSummary_naga
+    .map { it -> ["\"${it[0].trim()}\"", "\"${it[1]}\""] }
+    .collect(flat:false)
+    .map { it -> ["naga", it] }
+    .set { formatted_ass_naga }
+
+formatted_ass_ph
+    .mix(formatted_ass_naga)
+    .set{ formatted_ass }
+
+
+process pca_beta {
+
+    executor 'slurm'
+    queue 'gr10478b'
+    time '36h'
+
+    publishDir "${params.outDir}/10.beta_pca", mode: 'symlink'
+
+    input:
+    tuple val(group), val(assocSummaryLsit) from formatted_ass
+    path(info_path) from params.lociKnown
+
+    output:
+    tuple val(group), file(beta_csv) into loci_Pro_beta
+    file(pca_html)
+
+    script:
+    beta_csv = "${group}_beta_values.csv"
+    pca_html = "${group}_pca_beta.html"
+    """
+    source activate cteph_geno_pro
+
+    python ${params.scriptPath}/pca_beta_group.py \\
+    --group ${group} \\
+    --assocSummary '${assocSummaryLsit}' \\
+    --info_path ${info_path}
+    """
+}
+
+loci_Pro_beta.view()
